@@ -10,11 +10,12 @@ const FormInput = ({
   placeholder = '',
   className = '',
   options = [],
+  error = '',
 }) => {
   if (type === 'textarea') {
     return (
       <div className={className}>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           {label}
           {required && <span className="text-danger">*</span>}
         </label>
@@ -25,8 +26,11 @@ const FormInput = ({
           placeholder={placeholder}
           required={required}
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
+          className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent transition-colors text-base ${
+            error ? 'border-danger' : 'border-gray-300'
+          }`}
         />
+        {error && <p className="text-danger text-sm mt-1">{error}</p>}
       </div>
     );
   }
@@ -34,7 +38,7 @@ const FormInput = ({
   if (type === 'select') {
     return (
       <div className={className}>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           {label}
           {required && <span className="text-danger">*</span>}
         </label>
@@ -43,11 +47,12 @@ const FormInput = ({
           value={value}
           onChange={onChange}
           required={required}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
+          className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent transition-colors text-base appearance-none bg-white ${
+            error ? 'border-danger' : 'border-gray-300'
+          }`}
         >
           <option value="">Sélectionnez une option</option>
           {options.map((opt) => {
-            // Gérer les deux formats: chaîne de caractères ou objet
             if (typeof opt === 'string') {
               return (
                 <option key={opt} value={opt}>
@@ -63,13 +68,14 @@ const FormInput = ({
             }
           })}
         </select>
+        {error && <p className="text-danger text-sm mt-1">{error}</p>}
       </div>
     );
   }
 
   return (
     <div className={className}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
         {label}
         {required && <span className="text-danger">*</span>}
       </label>
@@ -80,8 +86,11 @@ const FormInput = ({
         onChange={onChange}
         placeholder={placeholder}
         required={required}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
+        className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent transition-colors text-base ${
+          error ? 'border-danger' : 'border-gray-300'
+        }`}
       />
+      {error && <p className="text-danger text-sm mt-1">{error}</p>}
     </div>
   );
 };

@@ -3,12 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import FormInput from '../components/FormInput';
 import { usePatientContext } from '../context/PatientContext';
 import { formatDateForInput } from '../utils/helpers';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 
 const ConsultationForm = () => {
   const navigate = useNavigate();
   const { patientId } = useParams();
-  const { getPatient, addConsultation, patients } = usePatientContext();
+  const { getPatient, addConsultation, patients, consultationTemplates } = usePatientContext();
 
   const [selectedPatientId, setSelectedPatientId] = useState(patientId || '');
   const [formData, setFormData] = useState({
@@ -34,6 +34,21 @@ const ConsultationForm = () => {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleTemplateSelect = (templateId) => {
+    const template = consultationTemplates.find((t) => t.id === templateId);
+    if (template) {
+      setFormData((prev) => ({
+        ...prev,
+        motif: template.motif,
+        symptomes: template.symptomes,
+        diagnostic: template.diagnostic,
+        traitement: template.traitement,
+        examens: template.examens,
+        notes: template.notes,
+      }));
+    }
   };
 
   const handleSubmit = (e) => {
@@ -98,6 +113,27 @@ const ConsultationForm = () => {
                   {patient.prenom} {patient.nom}
                 </p>
                 <p className="text-sm text-gray-600">{patient.telephone}</p>
+              </div>
+            )}
+
+            {/* Sélecteur de modèle */}
+            {consultationTemplates.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <DocumentDuplicateIcon className="w-4 h-4 inline mr-1" />
+                  Utiliser un modèle
+                </label>
+                <select
+                  onChange={(e) => handleTemplateSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="">-- Sélectionner un modèle --</option>
+                  {consultationTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.nom}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 

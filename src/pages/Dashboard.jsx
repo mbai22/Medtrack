@@ -1,18 +1,26 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   UserGroupIcon,
   ClipboardDocumentListIcon,
   CalendarIcon,
   PlusIcon,
+  BellIcon,
 } from '@heroicons/react/24/outline';
 import StatCard from '../components/StatCard';
 import { usePatientContext } from '../context/PatientContext';
 import { formatDate, formatDateShort } from '../utils/helpers';
+import { requestNotificationPermission, checkTodayAppointments } from '../utils/notifications';
 
 const Dashboard = () => {
-  const { getStats, patients, getPatientConsultations, getUpcomingAppointments } = usePatientContext();
+  const { getStats, patients, getPatientConsultations, getUpcomingAppointments, appointments } = usePatientContext();
   const stats = getStats();
+
+  // Demander la permission pour les notifications au chargement
+  useEffect(() => {
+    requestNotificationPermission();
+    checkTodayAppointments(appointments, patients);
+  }, [appointments, patients]);
 
   // Derniers patients
   const recentPatients = [...patients]

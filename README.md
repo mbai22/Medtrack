@@ -97,7 +97,61 @@ npm run build
 npm run preview
 ```
 
-## 📊 Structure de Données
+## � Déploiement sur Vercel
+
+### Méthode 1: Via Vercel CLI (Recommandé)
+
+```bash
+# 1. Installer Vercel CLI
+npm i -g vercel
+
+# 2. Se connecter à Vercel
+vercel login
+
+# 3. Déployer
+vercel
+
+# 4. Pour le déploiement en production
+vercel --prod
+```
+
+### Méthode 2: Via GitHub
+
+1. **Pousser le code sur GitHub**
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git branch -M main
+   git remote add origin https://github.com/votre-username/meditrack.git
+   git push -u origin main
+   ```
+
+2. **Connecter à Vercel**
+   - Allez sur [vercel.com](https://vercel.com)
+   - Cliquez sur "Add New Project"
+   - Importez votre repository GitHub
+   - Vercel détectera automatiquement la configuration Vite
+   - Cliquez sur "Deploy"
+
+### Configuration Vercel
+
+Le fichier `vercel.json` est déjà configuré avec :
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Rewrites**: Toutes les routes redirigent vers `index.html` (pour React Router)
+
+### Variables d'Environnement
+
+Aucune variable d'environnement n'est requise pour ce projet.
+
+### Après le Déploiement
+
+- L'application sera disponible sur `https://votre-projet.vercel.app`
+- Les données sont stockées dans le localStorage du navigateur de chaque utilisateur
+- Pas de backend nécessaire
+
+## �📊 Structure de Données
 
 ### Patient
 ```javascript

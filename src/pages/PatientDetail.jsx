@@ -1,8 +1,9 @@
 import React from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { PencilIcon, PlusIcon, TrashIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, PlusIcon, TrashIcon, ArrowLeftIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { usePatientContext } from '../context/PatientContext';
 import { getAge, formatDate, formatDateShort } from '../utils/helpers';
+import { generateOrdonnancePDF, generatePatientSummaryPDF } from '../utils/pdfGenerator';
 
 const PatientDetail = () => {
   const { id } = useParams();
@@ -32,6 +33,14 @@ const PatientDetail = () => {
     }
   };
 
+  const handleExportOrdonnance = (consultation) => {
+    generateOrdonnancePDF(patient, consultation);
+  };
+
+  const handleExportDossier = () => {
+    generatePatientSummaryPDF(patient, consultations);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 lg:p-8">
       {/* En-tête */}
@@ -57,6 +66,13 @@ const PatientDetail = () => {
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleExportDossier}
+              className="p-3 bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors"
+              title="Exporter le dossier patient"
+            >
+              <DocumentArrowDownIcon className="w-5 h-5" />
+            </button>
             <Link
               to={`/patients/${id}/modifier`}
               className="p-3 bg-blue-100 text-blue-600 hover:bg-blue-200 rounded-lg transition-colors"
@@ -157,6 +173,15 @@ const PatientDetail = () => {
                       {formatDate(consultation.date)}
                     </p>
                   </div>
+                  {consultation.traitement && (
+                    <button
+                      onClick={() => handleExportOrdonnance(consultation)}
+                      className="p-2 bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg transition-colors"
+                      title="Exporter l'ordonnance"
+                    >
+                      <DocumentArrowDownIcon className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">

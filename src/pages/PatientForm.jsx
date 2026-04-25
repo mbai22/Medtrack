@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import FormInput from '../components/FormInput';
 import { usePatientContext } from '../context/PatientContext';
 import { formatDateForInput } from '../utils/helpers';
+import { patientSchema } from '../validations/schemas';
 
 const sexOptions = ['Homme', 'Femme'];
 const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -27,6 +28,8 @@ const PatientForm = ({ patient = null }) => {
     statut: patient?.statut || 'Actif',
   });
 
+  const [errors, setErrors] = useState({});
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -38,12 +41,26 @@ const PatientForm = ({ patient = null }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (isEditing) {
-      updatePatient(patient.id, formData);
-      navigate(`/patients/${patient.id}`);
-    } else {
-      const newPatient = addPatient(formData);
-      navigate(`/patients/${newPatient.id}`);
+    // Validation avec Zod
+    try {
+      patientSchema.parse(formData);
+      setErrors({});
+      
+      if (isEditing) {
+        updatePatient(patient.id, formData);
+        navigate(`/patients/${patient.id}`);
+      } else {
+        const newPatient = addPatient(formData);
+        navigate(`/patients/${newPatient.id}`);
+      }
+    } catch (error) {
+      if (error.errors) {
+        const errorMap = {};
+        error.errors.forEach((err) => {
+          errorMap[err.path[0]] = err.message;
+        });
+        setErrors(errorMap);
+      }
     }
   };
 
@@ -67,6 +84,7 @@ const PatientForm = ({ patient = null }) => {
               onChange={handleChange}
               required
               placeholder="Dupont"
+              error={errors.nom}
             />
             <FormInput
               label="Prénom"
@@ -75,6 +93,7 @@ const PatientForm = ({ patient = null }) => {
               onChange={handleChange}
               required
               placeholder="Alice"
+              error={errors.prenom}
             />
           </div>
 
@@ -86,6 +105,7 @@ const PatientForm = ({ patient = null }) => {
               value={formData.dateNaissance}
               onChange={handleChange}
               required
+              error={errors.dateNaissance}
             />
             <FormInput
               label="Sexe"
@@ -95,6 +115,7 @@ const PatientForm = ({ patient = null }) => {
               onChange={handleChange}
               options={sexOptions}
               required
+              error={errors.sexe}
             />
           </div>
 
@@ -107,6 +128,7 @@ const PatientForm = ({ patient = null }) => {
               onChange={handleChange}
               required
               placeholder="06 12 34 56 78"
+              error={errors.telephone}
             />
             <FormInput
               label="Téléphone secondaire"
@@ -115,6 +137,7 @@ const PatientForm = ({ patient = null }) => {
               value={formData.telephoneSecondaire}
               onChange={handleChange}
               placeholder="06 98 76 54 32"
+              error={errors.telephoneSecondaire}
             />
           </div>
 
@@ -126,6 +149,7 @@ const PatientForm = ({ patient = null }) => {
               onChange={handleChange}
               required
               placeholder="Paris, 15e arrondissement"
+              error={errors.lieu}
             />
             <FormInput
               label="Profession"
@@ -133,6 +157,7 @@ const PatientForm = ({ patient = null }) => {
               value={formData.profession}
               onChange={handleChange}
               placeholder="Ingénieure informatique"
+              error={errors.profession}
             />
           </div>
 
@@ -144,6 +169,7 @@ const PatientForm = ({ patient = null }) => {
               value={formData.groupeSanguin}
               onChange={handleChange}
               options={bloodTypes}
+              error={errors.groupeSanguin}
             />
             <FormInput
               label="Statut"
@@ -152,6 +178,7 @@ const PatientForm = ({ patient = null }) => {
               value={formData.statut}
               onChange={handleChange}
               options={['Actif', 'Inactif']}
+              error={errors.statut}
             />
           </div>
 
