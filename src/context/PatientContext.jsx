@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { samplePatients, sampleConsultations, sampleAppointments } from '../data/sampleData';
 import { sampleDoctors } from '../data/sampleDoctors';
 import { sampleConsultationTemplates } from '../data/sampleTemplates';
 import { sampleMedications } from '../data/sampleMedications';
 import { createHistoryEntry, saveHistory, getObjectChanges, getEntityHistory, getAllHistory, formatHistoryEntry } from '../utils/history';
-import { saveEncrypted, loadEncrypted, getEncryptionKey } from '../utils/security';
+import { api } from '../services/api';
 
 const PatientContext = createContext();
 
@@ -27,208 +27,222 @@ export const PatientProvider = ({ children }) => {
   const [vitalSigns, setVitalSigns] = useState([]);
   const [medicationReminders, setMedicationReminders] = useState([]);
 
-  // Initialiser avec les données de localStorage ou les données d'exemple
   useEffect(() => {
-    const encryptionKey = getEncryptionKey();
-    const storedPatients = loadEncrypted('patients', encryptionKey);
-    const storedConsultations = loadEncrypted('consultations', encryptionKey);
-    const storedAppointments = loadEncrypted('appointments', encryptionKey);
-    const storedDoctors = loadEncrypted('doctors', encryptionKey);
-    const storedCurrentDoctor = loadEncrypted('currentDoctor', encryptionKey);
-    const storedTemplates = loadEncrypted('consultationTemplates', encryptionKey);
-    const storedMedications = loadEncrypted('medications', encryptionKey);
-    const storedVitalSigns = loadEncrypted('vitalSigns', encryptionKey);
-    const storedMedicationReminders = loadEncrypted('medicationReminders', encryptionKey);
+    const loadData = async () => {
+      try {
+        const [pData, cData, aData] = await Promise.all([
+          api.getPatients({ limit: 1000 }).catch(() => null),
+          api.getConsultations({ limit: 1000 }).catch(() => null),
+          api.getAppointments().catch(() => null),
+        ]);
 
-    if (!storedPatients) {
-      // Première utilisation : charger les données d'exemple
-      setPatients(samplePatients);
-      saveEncrypted('patients', samplePatients, encryptionKey);
+        if (pData) setPatients(pData.patients);
+        if (cData) setConsultations(cData.consultations);
+        if (aData) setAppointments(aData);
+      } catch {
+        const storedPatients = localStorage.getItem('patients_backup');
+        if (storedPatients) {
+          setPatients(JSON.parse(storedPatients));
+          setConsultations(JSON.parse(localStorage.getItem('consultations_backup') || '[]'));
+          setAppointments(JSON.parse(localStorage.getItem('appointments_backup') || '[]'));
+        } else {
+          setPatients(samplePatients);
+          setConsultations(sampleConsultations);
+          setAppointments(sampleAppointments);
+        }
+      }
+    };
+
+    loadData();
+
+    const storedDoctors = localStorage.getItem('doctors');
+    const storedCurrentDoctor = localStorage.getItem('currentDoctor');
+    const storedTemplates = localStorage.getItem('consultationTemplates');
+    const storedMedications = localStorage.getItem('medications');
+    const storedVitalSigns = localStorage.getItem('vitalSigns');
+    const storedMedicationReminders = localStorage.getItem('medicationReminders');
+
+    if (storedDoctors) {
+      setDoctors(JSON.parse(storedDoctors));
     } else {
-      setPatients(storedPatients);
-    }
-
-    if (!storedConsultations) {
-      setConsultations(sampleConsultations);
-      saveEncrypted('consultations', sampleConsultations, encryptionKey);
-    } else {
-      setConsultations(storedConsultations);
-    }
-
-    if (!storedAppointments) {
-      setAppointments(sampleAppointments);
-      saveEncrypted('appointments', sampleAppointments, encryptionKey);
-    } else {
-      setAppointments(storedAppointments);
-    }
-
-    if (!storedDoctors) {
       setDoctors(sampleDoctors);
-      saveEncrypted('doctors', sampleDoctors, encryptionKey);
-      // Définir le premier médecin comme médecin actuel par défaut
+      localStorage.setItem('doctors', JSON.stringify(sampleDoctors));
+    }
+
+    if (!storedCurrentDoctor && sampleDoctors.length > 0) {
       setCurrentDoctor(sampleDoctors[0]);
-      saveEncrypted('currentDoctor', sampleDoctors[0], encryptionKey);
+    } else if (storedCurrentDoctor) {
+      setCurrentDoctor(JSON.parse(storedCurrentDoctor));
+    }
+
+    if (storedTemplates) {
+      setConsultationTemplates(JSON.parse(storedTemplates));
     } else {
-      setDoctors(storedDoctors);
-    }
-
-    if (storedCurrentDoctor) {
-      setCurrentDoctor(storedCurrentDoctor);
-    }
-
-    if (!storedTemplates) {
       setConsultationTemplates(sampleConsultationTemplates);
-      saveEncrypted('consultationTemplates', sampleConsultationTemplates, encryptionKey);
-    } else {
-      setConsultationTemplates(storedTemplates);
     }
 
-    if (!storedMedications) {
+    if (storedMedications) {
+      setMedications(JSON.parse(storedMedications));
+    } else {
       setMedications(sampleMedications);
-      saveEncrypted('medications', sampleMedications, encryptionKey);
-    } else {
-      setMedications(storedMedications);
     }
 
-    if (!storedVitalSigns) {
-      setVitalSigns([]);
-      saveEncrypted('vitalSigns', [], encryptionKey);
-    } else {
-      setVitalSigns(storedVitalSigns);
+    if (storedVitalSigns) {
+      setVitalSigns(JSON.parse(storedVitalSigns));
     }
 
-    if (!storedMedicationReminders) {
-      setMedicationReminders([]);
-      saveEncrypted('medicationReminders', [], encryptionKey);
-    } else {
-      setMedicationReminders(storedMedicationReminders);
+    if (storedMedicationReminders) {
+      setMedicationReminders(JSON.parse(storedMedicationReminders));
     }
   }, []);
 
-  // Ajouter un patient
-  const addPatient = (patientData) => {
-    const newPatient = {
-      ...patientData,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
+  const addPatient = async (patientData) => {
+    const data = {
+      nom: patientData.nom,
+      prenom: patientData.prenom,
+      date_naissance: patientData.dateNaissance,
+      sexe: patientData.sexe,
+      telephone: patientData.telephone,
+      telephone_secondaire: patientData.telephoneSecondaire || '',
+      lieu: patientData.lieu,
+      profession: patientData.profession || '',
+      groupe_sanguin: patientData.groupeSanguin,
+      allergies: patientData.allergies || '',
+      antecedents: patientData.antecedents || '',
+      statut: patientData.statut || 'Actif',
     };
-    const updatedPatients = [...patients, newPatient];
-    setPatients(updatedPatients);
-    saveEncrypted('patients', updatedPatients, getEncryptionKey());
-    const historyEntry = createHistoryEntry('patient', newPatient.id, 'create', { new: newPatient }, currentDoctor?.id);
-    saveHistory(historyEntry);
-    return newPatient;
-  };
 
-  // Mettre à jour un patient
-  const updatePatient = (id, patientData) => {
-    const oldPatient = patients.find((p) => p.id === id);
-    const updatedPatients = patients.map((p) =>
-      p.id === id ? { ...p, ...patientData } : p
-    );
-    setPatients(updatedPatients);
-    saveEncrypted('patients', updatedPatients, getEncryptionKey());
-    
-    // Enregistrer l'historique
-    if (oldPatient) {
-      const changes = getObjectChanges(oldPatient, patientData);
-      const historyEntry = createHistoryEntry('patient', id, 'update', changes, currentDoctor?.id);
-      saveHistory(historyEntry);
+    try {
+      const patient = await api.createPatient(data);
+      const mapped = { ...patient, id: String(patient.id), dateNaissance: patient.date_naissance, telephoneSecondaire: patient.telephone_secondaire, groupeSanguin: patient.groupe_sanguin, createdAt: patient.created_at };
+      setPatients(prev => [...prev, mapped]);
+      return mapped;
+    } catch (err) {
+      const newPatient = {
+        ...patientData,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+      };
+      setPatients(prev => [...prev, newPatient]);
+      return newPatient;
     }
   };
 
-  // Supprimer un patient
-  const deletePatient = (id) => {
-    const oldPatient = patients.find((p) => p.id === id);
-    const updatedPatients = patients.filter((p) => p.id !== id);
-    const updatedConsultations = consultations.filter((c) => c.patientId !== id);
-    const updatedAppointments = appointments.filter((a) => a.patientId !== id);
+  const updatePatient = async (id, patientData) => {
+    const data = {
+      nom: patientData.nom,
+      prenom: patientData.prenom,
+      date_naissance: patientData.dateNaissance,
+      sexe: patientData.sexe,
+      telephone: patientData.telephone,
+      telephone_secondaire: patientData.telephoneSecondaire || '',
+      lieu: patientData.lieu,
+      profession: patientData.profession || '',
+      groupe_sanguin: patientData.groupeSanguin,
+      allergies: patientData.allergies || '',
+      antecedents: patientData.antecedents || '',
+      statut: patientData.statut || 'Actif',
+    };
 
-    setPatients(updatedPatients);
-    setConsultations(updatedConsultations);
-    setAppointments(updatedAppointments);
-
-    saveEncrypted('patients', updatedPatients, getEncryptionKey());
-    saveEncrypted('consultations', updatedConsultations, getEncryptionKey());
-    saveEncrypted('appointments', updatedAppointments, getEncryptionKey());
-    
-    // Enregistrer l'historique
-    if (oldPatient) {
-      const historyEntry = createHistoryEntry('patient', id, 'delete', { old: oldPatient }, currentDoctor?.id);
-      saveHistory(historyEntry);
+    try {
+      const patient = await api.updatePatient(id, data);
+      const mapped = { ...patient, id: String(patient.id), dateNaissance: patient.date_naissance, telephoneSecondaire: patient.telephone_secondaire, groupeSanguin: patient.groupe_sanguin, createdAt: patient.created_at };
+      setPatients(prev => prev.map(p => p.id === id ? mapped : p));
+      return mapped;
+    } catch {
+      setPatients(prev => prev.map(p => p.id === id ? { ...p, ...patientData } : p));
     }
   };
 
-  // Obtenir un patient par ID
+  const deletePatient = async (id) => {
+    try {
+      await api.deletePatient(id);
+    } catch {}
+    setPatients(prev => prev.filter(p => p.id !== id));
+    setConsultations(prev => prev.filter(c => c.patient_id !== id));
+    setAppointments(prev => prev.filter(a => a.patient_id !== id));
+  };
+
   const getPatient = (id) => {
-    return patients.find((p) => p.id === id);
+    return patients.find(p => String(p.id) === String(id));
   };
 
-  // Ajouter une consultation
-  const addConsultation = (consultationData) => {
-    const newConsultation = {
-      ...consultationData,
-      id: Date.now().toString(),
+  const addConsultation = async (consultationData) => {
+    const data = {
+      patient_id: consultationData.patientId,
+      date: consultationData.date || new Date().toISOString(),
+      motif: consultationData.motif,
+      symptomes: consultationData.symptomes || '',
+      diagnostic: consultationData.diagnostic,
+      traitement: consultationData.traitement || '',
+      examens: consultationData.examens || '',
+      notes: consultationData.notes || '',
+      prochain_rendez_vous: consultationData.prochainRendezVous || '',
     };
-    const updatedConsultations = [...consultations, newConsultation];
-    setConsultations(updatedConsultations);
-    saveEncrypted('consultations', updatedConsultations, getEncryptionKey());
-    
-    // Enregistrer l'historique
-    const historyEntry = createHistoryEntry('consultation', newConsultation.id, 'create', { new: newConsultation }, currentDoctor?.id);
-    saveHistory(historyEntry);
-    
-    return newConsultation;
+
+    try {
+      const consultation = await api.createConsultation(data);
+      const mapped = { ...consultation, id: String(consultation.id), patientId: consultation.patient_id, prochainRendezVous: consultation.prochain_rendez_vous };
+      setConsultations(prev => [...prev, mapped]);
+      return mapped;
+    } catch (err) {
+      const newConsultation = {
+        ...consultationData,
+        id: Date.now().toString(),
+      };
+      setConsultations(prev => [...prev, newConsultation]);
+      return newConsultation;
+    }
   };
 
-  // Obtenir les consultations d'un patient
   const getPatientConsultations = (patientId) => {
     return consultations
-      .filter((c) => c.patientId === patientId)
+      .filter(c => String(c.patientId || c.patient_id) === String(patientId))
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
-  // Ajouter un rendez-vous
-  const addAppointment = (appointmentData) => {
-    const newAppointment = {
-      ...appointmentData,
-      id: Date.now().toString(),
+  const addAppointment = async (appointmentData) => {
+    const data = {
+      patient_id: appointmentData.patientId,
+      date: appointmentData.date,
+      heure: appointmentData.heure,
+      motif: appointmentData.motif,
     };
-    const updatedAppointments = [...appointments, newAppointment];
-    setAppointments(updatedAppointments);
-    saveEncrypted('appointments', updatedAppointments, getEncryptionKey());
-    
-    // Enregistrer l'historique
-    const historyEntry = createHistoryEntry('appointment', newAppointment.id, 'create', { new: newAppointment }, currentDoctor?.id);
-    saveHistory(historyEntry);
-    
-    return newAppointment;
+
+    try {
+      const appointment = await api.createAppointment(data);
+      const mapped = { ...appointment, id: String(appointment.id), patientId: appointment.patient_id };
+      setAppointments(prev => [...prev, mapped]);
+      return mapped;
+    } catch (err) {
+      const newAppointment = {
+        ...appointmentData,
+        id: Date.now().toString(),
+      };
+      setAppointments(prev => [...prev, newAppointment]);
+      return newAppointment;
+    }
   };
 
-  // Obtenir les rendez-vous du jour
   const getTodayAppointments = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
 
     return appointments.filter((a) => {
-      const appDate = new Date(a.date);
-      appDate.setHours(0, 0, 0, 0);
-      return appDate.getTime() === today.getTime();
+      const d = a.date ? a.date.split('T')[0] : a.date;
+      return d === todayStr;
     });
   };
 
-  // Obtenir les rendez-vous à venir
   const getUpcomingAppointments = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+    const today = new Date().toISOString().split('T')[0];
     return appointments
-      .filter((a) => new Date(a.date) >= today)
+      .filter((a) => (a.date ? a.date.split('T')[0] : a.date) >= today)
       .sort((a, b) => new Date(a.date) - new Date(b.date))
       .slice(0, 10);
   };
 
-  // Obtenir les rendez-vous d'un mois spécifique
   const getMonthAppointments = (year, month) => {
     return appointments.filter((a) => {
       const date = new Date(a.date);
@@ -236,19 +250,18 @@ export const PatientProvider = ({ children }) => {
     });
   };
 
-  // Statistiques
   const getStats = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
 
     const todayConsultations = consultations.filter((c) => {
-      const cDate = new Date(c.date);
-      cDate.setHours(0, 0, 0, 0);
-      return cDate.getTime() === today.getTime();
+      const d = c.date ? c.date.split('T')[0] : c.date;
+      return d === todayStr;
     });
 
     const thisMonthPatients = patients.filter((p) => {
-      const pDate = new Date(p.createdAt);
+      const pDate = new Date(p.createdAt || p.created_at);
       return (
         pDate.getFullYear() === today.getFullYear() &&
         pDate.getMonth() === today.getMonth()
@@ -263,7 +276,6 @@ export const PatientProvider = ({ children }) => {
     };
   };
 
-  // Gestion des médecins
   const addDoctor = (doctorData) => {
     const newDoctor = {
       ...doctorData,
@@ -272,7 +284,7 @@ export const PatientProvider = ({ children }) => {
     };
     const updatedDoctors = [...doctors, newDoctor];
     setDoctors(updatedDoctors);
-    saveEncrypted('doctors', updatedDoctors, getEncryptionKey());
+    localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
     return newDoctor;
   };
 
@@ -281,26 +293,22 @@ export const PatientProvider = ({ children }) => {
       d.id === id ? { ...d, ...doctorData } : d
     );
     setDoctors(updatedDoctors);
-    saveEncrypted('doctors', updatedDoctors, getEncryptionKey());
-    
-    // Si c'est le médecin actuel qui est modifié, mettre à jour aussi
+    localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
     if (currentDoctor && currentDoctor.id === id) {
       const updatedCurrent = updatedDoctors.find((d) => d.id === id);
       setCurrentDoctor(updatedCurrent);
-      saveEncrypted('currentDoctor', updatedCurrent, getEncryptionKey());
+      localStorage.setItem('currentDoctor', JSON.stringify(updatedCurrent));
     }
   };
 
   const deleteDoctor = (id) => {
     const updatedDoctors = doctors.filter((d) => d.id !== id);
     setDoctors(updatedDoctors);
-    saveEncrypted('doctors', updatedDoctors, getEncryptionKey());
-    
-    // Si c'était le médecin actuel, changer pour un autre
+    localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
     if (currentDoctor && currentDoctor.id === id) {
       const newCurrent = updatedDoctors[0] || null;
       setCurrentDoctor(newCurrent);
-      saveEncrypted('currentDoctor', newCurrent, getEncryptionKey());
+      localStorage.setItem('currentDoctor', JSON.stringify(newCurrent));
     }
   };
 
@@ -308,11 +316,10 @@ export const PatientProvider = ({ children }) => {
     const doctor = doctors.find((d) => d.id === doctorId);
     if (doctor) {
       setCurrentDoctor(doctor);
-      saveEncrypted('currentDoctor', doctor, getEncryptionKey());
+      localStorage.setItem('currentDoctor', JSON.stringify(doctor));
     }
   };
 
-  // Fonctions d'historique
   const getPatientHistory = (patientId) => {
     const history = getEntityHistory('patient', patientId);
     return history.map(formatHistoryEntry);
@@ -333,7 +340,6 @@ export const PatientProvider = ({ children }) => {
     return history.map(formatHistoryEntry);
   };
 
-  // Gestion des modèles de consultations
   const addConsultationTemplate = (templateData) => {
     const newTemplate = {
       ...templateData,
@@ -341,7 +347,7 @@ export const PatientProvider = ({ children }) => {
     };
     const updatedTemplates = [...consultationTemplates, newTemplate];
     setConsultationTemplates(updatedTemplates);
-    saveEncrypted('consultationTemplates', updatedTemplates, getEncryptionKey());
+    localStorage.setItem('consultationTemplates', JSON.stringify(updatedTemplates));
     return newTemplate;
   };
 
@@ -350,16 +356,15 @@ export const PatientProvider = ({ children }) => {
       t.id === id ? { ...t, ...templateData } : t
     );
     setConsultationTemplates(updatedTemplates);
-    saveEncrypted('consultationTemplates', updatedTemplates, getEncryptionKey());
+    localStorage.setItem('consultationTemplates', JSON.stringify(updatedTemplates));
   };
 
   const deleteConsultationTemplate = (id) => {
     const updatedTemplates = consultationTemplates.filter((t) => t.id !== id);
     setConsultationTemplates(updatedTemplates);
-    saveEncrypted('consultationTemplates', updatedTemplates, getEncryptionKey());
+    localStorage.setItem('consultationTemplates', JSON.stringify(updatedTemplates));
   };
 
-  // Gestion des médicaments
   const addMedication = (medicationData) => {
     const newMedication = {
       ...medicationData,
@@ -367,7 +372,7 @@ export const PatientProvider = ({ children }) => {
     };
     const updatedMedications = [...medications, newMedication];
     setMedications(updatedMedications);
-    saveEncrypted('medications', updatedMedications, getEncryptionKey());
+    localStorage.setItem('medications', JSON.stringify(updatedMedications));
     return newMedication;
   };
 
@@ -376,13 +381,13 @@ export const PatientProvider = ({ children }) => {
       m.id === id ? { ...m, ...medicationData } : m
     );
     setMedications(updatedMedications);
-    saveEncrypted('medications', updatedMedications, getEncryptionKey());
+    localStorage.setItem('medications', JSON.stringify(updatedMedications));
   };
 
   const deleteMedication = (id) => {
     const updatedMedications = medications.filter((m) => m.id !== id);
     setMedications(updatedMedications);
-    saveEncrypted('medications', updatedMedications, getEncryptionKey());
+    localStorage.setItem('medications', JSON.stringify(updatedMedications));
   };
 
   const searchMedications = (query) => {
@@ -396,7 +401,6 @@ export const PatientProvider = ({ children }) => {
     );
   };
 
-  // Gestion des constantes vitales
   const addVitalSign = (vitalSignData) => {
     const newVitalSign = {
       ...vitalSignData,
@@ -405,7 +409,7 @@ export const PatientProvider = ({ children }) => {
     };
     const updatedVitalSigns = [...vitalSigns, newVitalSign];
     setVitalSigns(updatedVitalSigns);
-    saveEncrypted('vitalSigns', updatedVitalSigns, getEncryptionKey());
+    localStorage.setItem('vitalSigns', JSON.stringify(updatedVitalSigns));
     return newVitalSign;
   };
 
@@ -414,13 +418,13 @@ export const PatientProvider = ({ children }) => {
       v.id === id ? { ...v, ...vitalSignData } : v
     );
     setVitalSigns(updatedVitalSigns);
-    saveEncrypted('vitalSigns', updatedVitalSigns, getEncryptionKey());
+    localStorage.setItem('vitalSigns', JSON.stringify(updatedVitalSigns));
   };
 
   const deleteVitalSign = (id) => {
     const updatedVitalSigns = vitalSigns.filter((v) => v.id !== id);
     setVitalSigns(updatedVitalSigns);
-    saveEncrypted('vitalSigns', updatedVitalSigns, getEncryptionKey());
+    localStorage.setItem('vitalSigns', JSON.stringify(updatedVitalSigns));
   };
 
   const getPatientVitalSigns = (patientId) => {
@@ -429,7 +433,6 @@ export const PatientProvider = ({ children }) => {
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
-  // Gestion des rappels de médicaments
   const addMedicationReminder = (reminderData) => {
     const newReminder = {
       ...reminderData,
@@ -439,7 +442,7 @@ export const PatientProvider = ({ children }) => {
     };
     const updatedReminders = [...medicationReminders, newReminder];
     setMedicationReminders(updatedReminders);
-    saveEncrypted('medicationReminders', updatedReminders, getEncryptionKey());
+    localStorage.setItem('medicationReminders', JSON.stringify(updatedReminders));
     return newReminder;
   };
 
@@ -448,13 +451,13 @@ export const PatientProvider = ({ children }) => {
       r.id === id ? { ...r, ...reminderData } : r
     );
     setMedicationReminders(updatedReminders);
-    saveEncrypted('medicationReminders', updatedReminders, getEncryptionKey());
+    localStorage.setItem('medicationReminders', JSON.stringify(updatedReminders));
   };
 
   const deleteMedicationReminder = (id) => {
     const updatedReminders = medicationReminders.filter((r) => r.id !== id);
     setMedicationReminders(updatedReminders);
-    saveEncrypted('medicationReminders', updatedReminders, getEncryptionKey());
+    localStorage.setItem('medicationReminders', JSON.stringify(updatedReminders));
   };
 
   const getPatientMedicationReminders = (patientId) => {

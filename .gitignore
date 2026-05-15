@@ -39,6 +39,11 @@ lerna-debug.log*
 coverage/
 .nyc_output/
 
+# Server
+server/meditrack.db
+server/node_modules/
+server/.env
+
 # Misc
 .cache
 .temp

@@ -4,10 +4,10 @@ import Sidebar from './components/Sidebar';
 import { PatientProvider } from './context/PatientContext';
 import { usePatientContext } from './context/PatientContext';
 import Login from './pages/Login';
-import { hasPassword } from './utils/security';
+import NotificationProvider from './components/NotificationProvider';
+import { api } from './services/api';
 
-// Lazy loading des pages pour le code splitting
-import Landing from './pages/Landing';
+const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Patients = lazy(() => import('./pages/Patients'));
 const PatientForm = lazy(() => import('./pages/PatientForm'));
@@ -17,9 +17,9 @@ const Consultations = lazy(() => import('./pages/Consultations'));
 const Appointments = lazy(() => import('./pages/Appointments'));
 const Calendar = lazy(() => import('./pages/Calendar'));
 const Statistics = lazy(() => import('./pages/Statistics'));
+const Messages = lazy(() => import('./pages/Messages'));
 const Settings = lazy(() => import('./pages/Settings'));
 
-// Composant de chargement
 const LoadingFallback = () => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center">
     <div className="text-center">
@@ -32,7 +32,6 @@ const LoadingFallback = () => (
 const AppContent = () => {
   const { getPatient } = usePatientContext();
 
-  // Composant pour la modification d'un patient
   const EditPatient = () => {
     const { id } = useParams();
     const patient = getPatient(id);
@@ -49,6 +48,7 @@ const AppContent = () => {
   };
 
   return (
+    <NotificationProvider>
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <main className="flex-1 pt-16 lg:pt-0 overflow-y-auto">
@@ -66,36 +66,41 @@ const AppContent = () => {
             <Route path="/rendez-vous" element={<Appointments />} />
             <Route path="/calendrier" element={<Calendar />} />
             <Route path="/statistiques" element={<Statistics />} />
+            <Route path="/messages" element={<Messages />} />
             <Route path="/parametres" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </main>
     </div>
+    </NotificationProvider>
   );
 };
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('meditrack_token'));
   const [isLoading, setIsLoading] = useState(true);
+  const [isConfigured, setIsConfigured] = useState(false);
 
   useEffect(() => {
-    // Vérifier si un mot de passe est configuré
-    const passwordConfigured = hasPassword();
-    if (!passwordConfigured) {
-      setIsAuthenticated(false);
-    } else {
-      // Si un mot de passe est configuré, l'utilisateur doit se connecter
-      setIsAuthenticated(false);
-    }
-    setIsLoading(false);
+    const init = async () => {
+      try {
+        const data = await api.checkSetup();
+        setIsConfigured(data.configured);
+        if (!data.configured) {
+          localStorage.removeItem('meditrack_token');
+          localStorage.removeItem('current_user');
+          setIsAuthenticated(false);
+        }
+      } catch {
+        setIsConfigured(false);
+      }
+      setIsLoading(false);
+    };
+    init();
   }, []);
 
   const handleLogin = () => {
-    setIsAuthenticated(true);
-  };
-
-  const handleSetup = () => {
     setIsAuthenticated(true);
   };
 
@@ -111,7 +116,7 @@ function App() {
     <PatientProvider>
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login onLogin={handleLogin} onSetup={handleSetup} />} />
+        <Route path="/login" element={<Login onLogin={handleLogin} isConfigured={isConfigured} />} />
         <Route
           path="/dashboard"
           element={
